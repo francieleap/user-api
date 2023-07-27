@@ -1,0 +1,117 @@
+services:
+  user-api:
+    build:
+      context: ./
+      dockerfile: ./Dockerfile
+    image: franciferreiraap/user-api:latest
+    container_name: user-api
+    depends_on:
+      mysql-db:
+        condition: service_healthy
+        restart: true
+    env_file: ./.env
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:$MYSQL_CONTAINER_PORT/$MYSQL_DATABASE?createDatabaseIfNotExist=true&enabledTLSProtocols=TLSv1.2&useSSL=false
+      SPRING_DATASOURCE_USERNAME: $MYSQL_USER
+      SPRING_DATASOURCE_PASSWORD: $MYSQL_ROOT_PASSWORD
+    ports:
+      - ${SPRING_LOCAL_PORT}:${SPRING_CONTAINER_PORT}
+    networks:
+      - springboot-api-network
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "-S", "http://localhost:$SPRING_CONTAINER_PORT/api/actuator" ]
+      timeout: 5s
+      retries: 3
+    volumes:
+      - ./logs:/usr/src/api/logs
+
+  mysql-db:
+    image: mysql:5.7
+    container_name: mysql-db
+    restart: always
+    env_file: ./.env
+    environment:
+      - MYSQL_ROOT_HOST= "%"
+      - MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD
+      - MYSQL_USER=$MYSQL_USER
+      - MYSQL_PASSWORD=$MYSQL_ROOT_PASSWORD
+      - MYSQL_DATABASE=$MYSQL_DATABASE
+    ports:
+      - ${MYSQL_LOCAL_PORT}:${MYSQL_CONTAINER_PORT}
+    volumes:
+      - mysql-data:/app/data/mysql
+    networks:
+      - springboot-api-network
+    healthcheck:
+      test: [ "CMD", "mysqladmin" ,"ping", "-h", "localhost" , "-u", "$MYSQL_USER", "-p$MYSQL_ROOT_PASSWORD"]
+      timeout: 5s
+      retries: 3
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/app/data/prometheus
+    command: --config.file=/etc/prometheus/prometheus.yml
+    ports:
+      - ${PROMETHEUS_LOCAL_PORT}:${PROMETHEUS_CONTAINER_PORT}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    networks:
+      - springboot-api-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: always
+    ports:
+      - ${GRAFANA_LOCAL_PORT}:${GRAFANA_CONTAINER_PORT}
+    networks:
+      - springboot-api-network
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./datasources:/etc/grafana/provisioning/datasources
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+  promtail:
+    image: grafana/promtail:latest
+    container_name: promtail
+    ports:
+      - ${PROMTAIL_LOCAL_PORT}:${PROMTAIL_CONTAINER_PORT}
+    volumes:
+      - ./logs:/usr/src/api/logs
+      - ./config/promtail.yml:/etc/promtail/promtail.yml
+      - ./tmp:/tmp
+      - /var/log:/var/log
+    command: --config.file=/etc/promtail/promtail.yml
+    depends_on:
+      loki:
+        condition: service_healthy
+        restart: true
+    networks:
+      - springboot-api-network
+
+  loki:
+    image: grafana/loki:latest
+    container_name: loki
+    ports:
+      - ${LOKI_LOCAL_PORT}:${LOKI_CONTAINER_PORT}
+    command: --config.file=/etc/loki/local-config.yaml
+    networks:
+      - springboot-api-network
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "-S", "http://localhost:$LOKI_CONTAINER_PORT/ready" ]
+      timeout: 5s
+      retries: 3
+
+networks:
+  springboot-api-network:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  prometheus-data:
+  grafana-data:
