@@ -50,9 +50,22 @@ Os testes foram desenvolvido utilizando o bando de dados H2 em memória
 
 Ao acessar o Grafana é possível verificar os logs da aplicação e do sistema executando os seguintes passos:
 
+**OBS:**
+
+Acesso ao Grafana
+
+Usuário: admin
+
+Senha: admin
+
+Clicar na opção: Skip
+
+****
 **Para visualizar os logs:**
   <img alt="Visualização de log com Loki" src="./assets/fig-vizualizacao-log.png"/>
 
 
 **Para visualizar as métricas**
 <img alt="Visualização de log com Loki" src="./assets/fig-vizualizacao-metricas.png"/>
+
+OBS: Dentro do projeto também foi disponibilizado a collection do postam com as rotas da api
